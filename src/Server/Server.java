@@ -19,9 +19,10 @@ public class Server {
             new Thread(() -> {
                 try {
                     DataOutputStream serverOutput = new DataOutputStream(socket.getOutputStream());
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
                     while (true) {
                         try {
-                            serverOutput.writeUTF("From server: " + new Scanner(System.in).nextLine() + "\n");
+                            serverOutput.writeUTF("From server: " + reader.readLine() + "\n");
                             serverOutput.flush();
                         } catch (IOException e) {
                             System.out.println("Server message send error");
