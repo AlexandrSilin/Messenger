@@ -3,7 +3,6 @@ package Server;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Scanner;
 
 public class Server {
 
@@ -17,9 +16,8 @@ public class Server {
             outputStream.writeUTF("From server: Username connected\n");
             outputStream.flush();
             new Thread(() -> {
-                try {
-                    DataOutputStream serverOutput = new DataOutputStream(socket.getOutputStream());
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+                     DataOutputStream serverOutput = new DataOutputStream(socket.getOutputStream())){
                     while (true) {
                         try {
                             serverOutput.writeUTF("From server: " + reader.readLine() + "\n");
