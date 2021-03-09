@@ -9,6 +9,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
+import static java.lang.Thread.sleep;
+
 public class EchoClient extends JFrame {
 
     private final Integer SERVER_PORT = 8081;
@@ -16,7 +18,8 @@ public class EchoClient extends JFrame {
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
-    boolean isAuthorized = false;
+    private boolean isAuthorized = false;
+    private boolean isTimeout = false;
 
     private JTextField msgInputField;
     private JTextArea chatArea;
@@ -34,9 +37,24 @@ public class EchoClient extends JFrame {
         socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
         dis = new DataInputStream(socket.getInputStream());
         dos = new DataOutputStream(socket.getOutputStream());
+
         new Thread(() -> {
             try {
-                while (true) {
+                sleep(120000);
+                if (!isAuthorized){
+                    isTimeout = true;
+                    chatArea.append("Auth timeout (120 sec)\n");
+                    closeConnection();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                sleep(2000);
+                while (!isTimeout) {
                     String messageFromServer = dis.readUTF();
                     if (messageFromServer.startsWith("/authok")) {
                         isAuthorized = true;
@@ -50,7 +68,7 @@ public class EchoClient extends JFrame {
                     String messageFromServer = dis.readUTF();
                     chatArea.append(messageFromServer + "\n");
                 }
-            } catch (IOException ignored) {
+            } catch (IOException | InterruptedException ignored) {
 
             }
         }).start();
@@ -75,6 +93,7 @@ public class EchoClient extends JFrame {
             dis.close();
             dos.close();
             socket.close();
+            chatArea.append("Disconnected\n");
         } catch (IOException ignored) {
         }
     }

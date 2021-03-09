@@ -4,27 +4,39 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 
 public class ClientHandler {
-    
+
     private MyServer myServer;
     private Socket socket;
     private DataInputStream dis;
     private DataOutputStream dos;
-    
+    private Connection connection;
+    private Statement statement;
+
     private String name;
-    
-    
+    private long timer;
+
     public ClientHandler(MyServer myServer, Socket socket) {
         try {
-            
             this.myServer = myServer;
             this.socket = socket;
             this.dis = new DataInputStream(socket.getInputStream());
             this.dos = new DataOutputStream(socket.getOutputStream());
             this.name = "";
-            
+
+            try {
+                connection = Connect.getConnection();
+                statement = connection.createStatement();
+            } catch (SQLException | ClassNotFoundException throwables) {
+                throwables.printStackTrace();
+            }
+
             new Thread(() -> {
                 try {
                     authentication();
@@ -33,9 +45,9 @@ public class ClientHandler {
                 } finally {
                     closeConnection();
                 }
-                
+
             }).start();
-            
+
         } catch (IOException e) {
             closeConnection();
             throw new RuntimeException("Problem with ClientHandler");
@@ -43,14 +55,20 @@ public class ClientHandler {
     }
 
     public void authentication() throws IOException {
+        sendMessage("type /auth [login] [password] for authentication");
         int count = 0;
         while (count < 3) {
-            String str = dis.readUTF();
+            String str = dis.readUTF().trim();
             if (str.startsWith("/auth")) { //  /auth login password
                 String [] arr = str.split("\\s");
-                String nick = myServer
-                        .getAuthService()
-                        .getNickByLoginAndPassword(arr[1], arr[2]);
+                String nick = null;
+                try {
+                    nick = myServer
+                            .getAuthService()
+                            .getNickByLoginAndPassword(arr[1], arr[2]);
+                } catch (SQLException throwables) {
+                    throwables.printStackTrace();
+                }
                 if (nick != null) {
                     if (!myServer.isNickBusy(nick)) {
                         sendMessage("/authok " + nick);
@@ -71,40 +89,73 @@ public class ClientHandler {
                     } else {
                         sendMessage("Nick is busy");
                     }
-                } else {
+                }  else {
                     sendMessage("Wrong login and/or password");
                     count++;
                 }
+            } else {
+                sendMessage("Wrong command");
             }
         }
         sendMessage("Number of attempts exceeded");
     }
 
     public void readMessage() throws IOException {
-        while (true) {
-            String messageFromClient = dis.readUTF();
-            System.out.println(name + " send message " + messageFromClient);
-            if (messageFromClient.equals("/end")) {
-                return;
+
+        new Thread(() -> {
+            timer = System.currentTimeMillis();
+            while (true) {
+                if (System.currentTimeMillis() - timer > 300000) {
+                    sendMessage("Timeout session");
+                    break;
+                }
             }
-            if (messageFromClient.startsWith("/w")){
-                List <ClientHandler> clients = myServer.getClients();
-                String[] messages = messageFromClient.split("\\s");
-                if (messages.length < 3){
-                    sendMessage("Incorrect format");
-                } else {
-                    for (ClientHandler client : clients) {
-                        if (client.getName().equals(messages[1])) {
-                            StringBuilder out = new StringBuilder();
-                            out.append("Private message from ").append(name).append(": ");
-                            for (int i = 2; i < messages.length; i++) {
-                                out.append(messages[i]).append(" ");
-                            }
-                            client.sendMessage(out.toString().trim());
-                            break;
+            closeConnection();
+        }).start();
+
+        while (true) {
+            String messageFromClient = dis.readUTF().trim();
+            timer = System.currentTimeMillis();
+            System.out.println(name + " send message " + messageFromClient);
+            if (messageFromClient.startsWith("/")){
+                if (messageFromClient.equals("/end")) {
+                    return;
+                }
+                else if (messageFromClient.startsWith("/change")){
+                    String [] arr = messageFromClient.split("\\s");
+                    if (arr.length < 4){
+                        sendMessage("syntax: /change login password newNick");
+                    } else {
+                        try {
+
+                            statement.executeUpdate("update users set nick = '" + arr[3] + "' where " +
+                                    "login = '" + arr[1] + "' and password = '" + arr[2] + "'");
+                            sendMessage("Success change! Your new nick is " + arr[3]);
+                            name = arr[3];
+
+                        } catch (SQLException throwables) {
+                            sendMessage("Can't change nick");
+                            throwables.printStackTrace();
                         }
-                        sendMessage("User offline");
                     }
+                }
+                else if (messageFromClient.startsWith("/w")) {
+                    List<ClientHandler> clients = myServer.getClients();
+                    String[] messages = messageFromClient.split("\\s", 2);
+                    if (messages.length < 3) {
+                        sendMessage("Incorrect format");
+                    } else {
+                        for (ClientHandler client : clients) {
+                            if (client.getName().equals(messages[1])) {
+                                client.sendMessage(messages[2]);
+                                break;
+                            }
+                            sendMessage("User offline");
+                        }
+                    }
+                }
+                else {
+                    sendMessage("Wrong command");
                 }
             } else {
                 myServer.broadcastMessage(name + ": " + messageFromClient);

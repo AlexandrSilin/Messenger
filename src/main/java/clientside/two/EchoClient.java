@@ -1,4 +1,4 @@
-package main.java.clientside.one;
+package main.java.clientside.two;
 
 import javax.swing.*;
 import java.awt.*;
@@ -53,6 +53,7 @@ public class EchoClient extends JFrame {
 
         new Thread(() -> {
             try {
+                sleep(2000);
                 while (!isTimeout) {
                     String messageFromServer = dis.readUTF();
                     if (messageFromServer.startsWith("/authok")) {
@@ -67,7 +68,7 @@ public class EchoClient extends JFrame {
                     String messageFromServer = dis.readUTF();
                     chatArea.append(messageFromServer + "\n");
                 }
-            } catch (IOException ignored) {
+            } catch (IOException | InterruptedException ignored) {
 
             }
         }).start();
