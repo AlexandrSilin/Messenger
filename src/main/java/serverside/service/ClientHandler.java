@@ -80,9 +80,9 @@ public class ClientHandler {
                         int number;
                         int countMessages = 0;
                         try {
-                            while ((number = fis.read()) != -1 && count < 100) {
+                            while ((number = fis.read()) != -1 && countMessages < 100) {
                                 message.append((char) number);
-                                count++;
+                                countMessages++;
                             }
                         } catch (IOException e) {
                             System.out.println("Can't read history");
