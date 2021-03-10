@@ -1,11 +1,8 @@
 package main.java.serverside.service;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
 import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
@@ -18,6 +15,8 @@ public class ClientHandler {
     private DataOutputStream dos;
     private Connection connection;
     private Statement statement;
+    private File history;
+    private FileInputStream fis;
 
     private String name;
     private long timer;
@@ -28,7 +27,7 @@ public class ClientHandler {
             this.socket = socket;
             this.dis = new DataInputStream(socket.getInputStream());
             this.dos = new DataOutputStream(socket.getOutputStream());
-            this.name = "";
+            this.name = null;
 
             try {
                 connection = Connect.getConnection();
@@ -57,7 +56,7 @@ public class ClientHandler {
     public void authentication() throws IOException {
         sendMessage("type /auth [login] [password] for authentication");
         int count = 0;
-        while (count < 3) {
+        while (count < 3 && name == null) {
             String str = dis.readUTF().trim();
             if (str.startsWith("/auth")) { //  /auth login password
                 String [] arr = str.split("\\s");
@@ -75,17 +74,18 @@ public class ClientHandler {
                         name = nick;
                         myServer.broadcastMessage("Hello " + name);
                         myServer.subscribe(this);
-                        List<String> history = myServer.getHistory();
-                        if (history.size() > 50) {
-                            for (int i = 1; i <= 50; i++){
-                                sendMessage(history.get(history.size() - i));
+                        history = myServer.getHistory();
+                        fis = new FileInputStream(history);
+                        StringBuilder message = new StringBuilder();
+                        int number;
+                        try {
+                            while ((number = fis.read()) != -1) {
+                                message.append((char) number);
                             }
-                        } else {
-                            for (int i = history.size() - 1; i > 0; i--){
-                                sendMessage(history.get(i));
-                            }
+                        } catch (IOException e) {
+                            System.out.println("Can't read history");
                         }
-                        return;
+                        sendMessage(message.toString());
                     } else {
                         sendMessage("Nick is busy");
                     }
@@ -97,7 +97,9 @@ public class ClientHandler {
                 sendMessage("Wrong command");
             }
         }
-        sendMessage("Number of attempts exceeded");
+        if (count == 3) {
+            sendMessage("Number of attempts exceeded");
+        }
     }
 
     public void readMessage() throws IOException {
@@ -123,16 +125,14 @@ public class ClientHandler {
                 }
                 else if (messageFromClient.startsWith("/change")){
                     String [] arr = messageFromClient.split("\\s");
-                    if (arr.length < 4){
+                    if (arr.length != 4){
                         sendMessage("syntax: /change login password newNick");
                     } else {
                         try {
-
                             statement.executeUpdate("update users set nick = '" + arr[3] + "' where " +
                                     "login = '" + arr[1] + "' and password = '" + arr[2] + "'");
                             sendMessage("Success change! Your new nick is " + arr[3]);
                             name = arr[3];
-
                         } catch (SQLException throwables) {
                             sendMessage("Can't change nick");
                             throwables.printStackTrace();
