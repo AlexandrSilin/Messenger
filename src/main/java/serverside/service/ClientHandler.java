@@ -78,9 +78,11 @@ public class ClientHandler {
                         fis = new FileInputStream(history);
                         StringBuilder message = new StringBuilder();
                         int number;
+                        int countMessages = 0;
                         try {
-                            while ((number = fis.read()) != -1) {
+                            while ((number = fis.read()) != -1 && count < 100) {
                                 message.append((char) number);
+                                count++;
                             }
                         } catch (IOException e) {
                             System.out.println("Can't read history");
