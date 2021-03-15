@@ -6,22 +6,27 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ClientHandler {
 
     private MyServer myServer;
     private Socket socket;
+
     private DataInputStream dis;
     private DataOutputStream dos;
+
     private Connection connection;
     private Statement statement;
-    private File history;
-    private FileInputStream fis;
 
     private String name;
     private long timer;
 
+    private ExecutorService executor;
+
     public ClientHandler(MyServer myServer, Socket socket) {
+        executor = Executors.newCachedThreadPool();
         try {
             this.myServer = myServer;
             this.socket = socket;
@@ -36,7 +41,7 @@ public class ClientHandler {
                 throwables.printStackTrace();
             }
 
-            new Thread(() -> {
+            Thread clientAuth = new Thread(() -> {
                 try {
                     authentication();
                     readMessage();
@@ -44,9 +49,9 @@ public class ClientHandler {
                 } finally {
                     closeConnection();
                 }
+            });
 
-            }).start();
-
+            executor.execute(clientAuth);
         } catch (IOException e) {
             closeConnection();
             throw new RuntimeException("Problem with ClientHandler");
@@ -74,20 +79,6 @@ public class ClientHandler {
                         name = nick;
                         myServer.broadcastMessage("Hello " + name);
                         myServer.subscribe(this);
-                        history = myServer.getHistory();
-                        fis = new FileInputStream(history);
-                        StringBuilder message = new StringBuilder();
-                        int number;
-                        int countMessages = 0;
-                        try {
-                            while ((number = fis.read()) != -1 && countMessages < 100) {
-                                message.append((char) number);
-                                countMessages++;
-                            }
-                        } catch (IOException e) {
-                            System.out.println("Can't read history");
-                        }
-                        sendMessage(message.toString());
                     } else {
                         sendMessage("Nick is busy");
                     }
@@ -106,7 +97,7 @@ public class ClientHandler {
 
     public void readMessage() throws IOException {
 
-        new Thread(() -> {
+        Thread clientMessage = new Thread(() -> {
             timer = System.currentTimeMillis();
             while (true) {
                 if (System.currentTimeMillis() - timer > 300000) {
@@ -115,14 +106,16 @@ public class ClientHandler {
                 }
             }
             closeConnection();
-        }).start();
+        });
 
+        executor.execute(clientMessage);
         while (true) {
             String messageFromClient = dis.readUTF().trim();
             timer = System.currentTimeMillis();
             System.out.println(name + " send message " + messageFromClient);
             if (messageFromClient.startsWith("/")){
                 if (messageFromClient.equals("/end")) {
+                    executor.shutdownNow();
                     return;
                 }
                 else if (messageFromClient.startsWith("/change")){
@@ -161,7 +154,6 @@ public class ClientHandler {
                 }
             } else {
                 myServer.broadcastMessage(name + ": " + messageFromClient);
-                myServer.addToHistory(name + ": " + messageFromClient);
             }
         }
     }
