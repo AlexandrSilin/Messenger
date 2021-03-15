@@ -2,18 +2,26 @@ package main.java.serverside.service;
 
 import main.java.serverside.interfaces.AuthService;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
 public class BaseAuthService implements AuthService {
 
-    private List<Entry> entryList;
+    private Connection connection;
+    private Statement statement = null;
 
     public BaseAuthService() {
-        entryList = new ArrayList<>();
-        entryList.add(new Entry("David", "qazwsx", "One"));
-        entryList.add(new Entry("Viktor", "qwerty", "Two"));
-        entryList.add(new Entry("Vladimir", "123456", "Three"));
+        try {
+            connection = Connect.getConnection();
+            statement = connection.createStatement();
+        } catch (SQLException | ClassNotFoundException throwables) {
+            throwables.printStackTrace();
+        }
+        //insert into users ("login", "password", "nick") values ('Vladimir', '123456', 'Three');
     }
 
     @Override
@@ -27,16 +35,13 @@ public class BaseAuthService implements AuthService {
     }
 
     @Override
-    public String getNickByLoginAndPassword(String login, String password) {
-        for (Entry e : entryList) {
-            if (e.login.equals(login) && e.password.equals(password)) {
-                return e.nick;
-            }
-        }
-        return null;
+    public String getNickByLoginAndPassword(String login, String password) throws SQLException {
+        ResultSet set = statement.executeQuery("SELECT nick FROM users WHERE login = '" + login +
+                        "'AND password = " + "'" + password + "'");
+        return set.next() ? set.getString("nick") : null;
     }
 
-    private class Entry {
+    /*private class Entry {
         private String login;
         private String password;
         private String nick;
@@ -46,5 +51,5 @@ public class BaseAuthService implements AuthService {
             this.password = password;
             this.nick = nick;
         }
-    }
+    }*/
 }

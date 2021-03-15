@@ -2,18 +2,19 @@ package main.java.serverside.service;
 
 import main.java.serverside.interfaces.AuthService;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MyServer {
     private final int PORT = 8081;
-    private final int HISTORY_CAPACITY = 1000;
 
     private List<ClientHandler> clients;
-    private List<String> history;
+    private File history;
+    private FileOutputStream fos;
 
     private AuthService authService;
 
@@ -22,14 +23,18 @@ public class MyServer {
     }
 
     public MyServer() {
-        try (ServerSocket server = new ServerSocket(PORT)){
+        history = new File("history.txt");
+        try {
+            fos = new FileOutputStream(history, true);
+        } catch (FileNotFoundException e) {
+            System.out.println("File not found");
+        }
 
+        try (ServerSocket server = new ServerSocket(PORT)){
             authService = new BaseAuthService();
             authService.start();
 
             clients = new ArrayList<>();
-            history = new ArrayList<>();
-
             while (true) {
                 System.out.println("Сервер ожидает подключения");
                 Socket socket = server.accept();
@@ -48,6 +53,11 @@ public class MyServer {
     }
 
     public synchronized void broadcastMessage(String message) {
+        try {
+            addToHistory(message);
+        } catch (IOException e) {
+            System.out.println("Can't write history");
+        }
         for (ClientHandler c : clients) {
             c.sendMessage(message);
         }
@@ -70,14 +80,12 @@ public class MyServer {
         return false;
     }
 
-    public void addToHistory(String message){
-        if (history.size() > HISTORY_CAPACITY - 1){
-            history.remove(0);
-        }
-        history.add(message);
+    public void addToHistory(String message) throws IOException {
+        message += '\n';
+        fos.write(message.getBytes(StandardCharsets.UTF_8));
     }
 
-    public List<String> getHistory(){
+    public File getHistory(){
         return history;
     }
 
