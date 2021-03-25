@@ -1,17 +1,19 @@
-package main.java.serverside.service;
+package serverside.service;
 
 import main.java.serverside.interfaces.AuthService;
+import org.apache.log4j.Level;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-import java.io.*;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MyServer {
     private final int PORT = 8081;
-
+    private final Logger logger = LogManager.getLogger(MyServer.class);
     private List<ClientHandler> clients;
 
     private AuthService authService;
@@ -27,15 +29,15 @@ public class MyServer {
 
             clients = new ArrayList<>();
             while (true) {
-                System.out.println("Сервер ожидает подключения");
+                logger.log(Level.INFO, "server run");
                 Socket socket = server.accept();
-                System.out.println(socket.getInetAddress().getCanonicalHostName());
-                System.out.println("Клиент подклчился");
+                logger.log(Level.INFO, "attempt to connect");
                 new ClientHandler(this, socket);
             }
 
         } catch (IOException e){
-            System.out.println("Сервер не пережил землятрясение");
+            System.out.println("Server dead");
+            logger.log(Level.FATAL, "Server dead");
         } finally {
             if (authService != null) {
                 authService.stop();
@@ -46,6 +48,7 @@ public class MyServer {
     public synchronized void broadcastMessage(String message) {
         for (ClientHandler c : clients) {
             c.sendMessage(message);
+            logger.log(Level.INFO, "send broadcast message: " + message);
         }
     }
 

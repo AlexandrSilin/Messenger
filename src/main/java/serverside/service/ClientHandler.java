@@ -1,4 +1,4 @@
-package main.java.serverside.service;
+package serverside.service;
 
 import java.io.*;
 import java.net.Socket;
@@ -8,6 +8,11 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import main.java.serverside.service.Connect;
+import org.apache.log4j.Level;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 public class ClientHandler {
 
@@ -24,6 +29,7 @@ public class ClientHandler {
     private long timer;
 
     private ExecutorService executor;
+    private final Logger logger = LogManager.getLogger(BaseAuthService.class);
 
     public ClientHandler(MyServer myServer, Socket socket) {
         executor = Executors.newCachedThreadPool();
@@ -39,13 +45,15 @@ public class ClientHandler {
                 statement = connection.createStatement();
             } catch (SQLException | ClassNotFoundException throwables) {
                 throwables.printStackTrace();
+                logger.log(Level.ERROR, "Problem with connection");
             }
 
             Thread clientAuth = new Thread(() -> {
                 try {
                     authentication();
                     readMessage();
-                } catch (IOException ignored) {
+                } catch (IOException exception) {
+                    logger.log(Level.ERROR, "IO error");
                 } finally {
                     closeConnection();
                 }
@@ -54,6 +62,7 @@ public class ClientHandler {
             executor.execute(clientAuth);
         } catch (IOException e) {
             closeConnection();
+            logger.log(Level.ERROR, "Problem with ClientHandler");
             throw new RuntimeException("Problem with ClientHandler");
         }
     }
@@ -71,6 +80,7 @@ public class ClientHandler {
                             .getAuthService()
                             .getNickByLoginAndPassword(arr[1], arr[2]);
                 } catch (SQLException throwables) {
+                    logger.log(Level.ERROR, "SQL error");
                     throwables.printStackTrace();
                 }
                 if (nick != null) {
@@ -79,18 +89,23 @@ public class ClientHandler {
                         name = nick;
                         myServer.broadcastMessage("Hello " + name);
                         myServer.subscribe(this);
+                        logger.log(Level.INFO, "user " + name + " is authorized");
                     } else {
+                        logger.log(Level.WARN, nick + " nick is busy");
                         sendMessage("Nick is busy");
                     }
                 }  else {
                     sendMessage("Wrong login and/or password");
+                    logger.log(Level.WARN, "Wrong login and/or password");
                     count++;
                 }
             } else {
+                logger.log(Level.WARN, "Wrong command");
                 sendMessage("Wrong command");
             }
         }
         if (count == 3) {
+            logger.log(Level.WARN, "Number of attempts exceeded");
             sendMessage("Number of attempts exceeded");
         }
     }
@@ -101,6 +116,7 @@ public class ClientHandler {
             timer = System.currentTimeMillis();
             while (true) {
                 if (System.currentTimeMillis() - timer > 300000) {
+                    logger.log(Level.WARN, "Timeout session");
                     sendMessage("Timeout session");
                     break;
                 }
@@ -112,13 +128,14 @@ public class ClientHandler {
         while (true) {
             String messageFromClient = dis.readUTF().trim();
             timer = System.currentTimeMillis();
-            System.out.println(name + " send message " + messageFromClient);
             if (messageFromClient.startsWith("/")){
                 if (messageFromClient.equals("/end")) {
+                    logger.log(Level.INFO, name + " disconnect");
                     executor.shutdownNow();
                     return;
                 }
                 else if (messageFromClient.startsWith("/change")){
+                    logger.log(Level.INFO, name + " tries to change nick");
                     String [] arr = messageFromClient.split("\\s");
                     if (arr.length != 4){
                         sendMessage("syntax: /change login password newNick");
@@ -127,6 +144,7 @@ public class ClientHandler {
                             statement.executeUpdate("update users set nick = '" + arr[3] + "' where " +
                                     "login = '" + arr[1] + "' and password = '" + arr[2] + "'");
                             sendMessage("Success change! Your new nick is " + arr[3]);
+                            logger.log(Level.INFO, name + " changed nick to " + arr[3]);
                             name = arr[3];
                         } catch (SQLException throwables) {
                             sendMessage("Can't change nick");
@@ -137,9 +155,11 @@ public class ClientHandler {
                 else if (messageFromClient.startsWith("/w")) {
                     List<ClientHandler> clients = myServer.getClients();
                     String[] messages = messageFromClient.split("\\s", 2);
-                    if (messages.length < 3) {
+                    if (messages[2].trim().isEmpty()) {
+                        logger.log(Level.WARN, name + " input incorrect format for personal message");
                         sendMessage("Incorrect format");
                     } else {
+                        logger.log(Level.INFO, name + " tries to send: " + messages[2] + " for " + messages[1]);
                         for (ClientHandler client : clients) {
                             if (client.getName().equals(messages[1])) {
                                 client.sendMessage(messages[2]);
@@ -150,6 +170,7 @@ public class ClientHandler {
                     }
                 }
                 else {
+                    logger.log(Level.WARN, name + " input wrong command");
                     sendMessage("Wrong command");
                 }
             } else {
@@ -161,7 +182,8 @@ public class ClientHandler {
     public void sendMessage(String message) {
         try {
             dos.writeUTF(message);
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            logger.log(Level.ERROR, "IO error");
         }
     }
 
@@ -172,7 +194,9 @@ public class ClientHandler {
             dis.close();
             dos.close();
             socket.close();
-        } catch (IOException ignored) {
+            logger.log(Level.INFO, name + " disconnect");
+        } catch (IOException e) {
+            logger.log(Level.ERROR, "IO error");
         }
     }
 
