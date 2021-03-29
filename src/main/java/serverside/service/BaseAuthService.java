@@ -6,8 +6,6 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
 
 public class BaseAuthService implements AuthService {
 
@@ -21,7 +19,6 @@ public class BaseAuthService implements AuthService {
         } catch (SQLException | ClassNotFoundException throwables) {
             throwables.printStackTrace();
         }
-        //insert into users ("login", "password", "nick") values ('Vladimir', '123456', 'Three');
     }
 
     @Override
@@ -40,16 +37,4 @@ public class BaseAuthService implements AuthService {
                         "'AND password = " + "'" + password + "'");
         return set.next() ? set.getString("nick") : null;
     }
-
-    /*private class Entry {
-        private String login;
-        private String password;
-        private String nick;
-
-        public Entry(String login, String password, String nick) {
-            this.login = login;
-            this.password = password;
-            this.nick = nick;
-        }
-    }*/
 }

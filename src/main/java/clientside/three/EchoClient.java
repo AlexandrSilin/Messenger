@@ -4,10 +4,11 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static java.lang.Thread.sleep;
 
@@ -15,9 +16,18 @@ public class EchoClient extends JFrame {
 
     private final Integer SERVER_PORT = 8081;
     private final String SERVER_ADDRESS = "localhost";
+
     private Socket socket;
+
     private DataInputStream dis;
     private DataOutputStream dos;
+    private FileOutputStream fos;
+    private RandomAccessFile accessFile;
+
+    private File history;
+
+    private ExecutorService executor;
+
     private boolean isAuthorized = false;
     private boolean isTimeout = false;
 
@@ -25,6 +35,7 @@ public class EchoClient extends JFrame {
     private JTextArea chatArea;
 
     public EchoClient() {
+        executor = Executors.newCachedThreadPool();
         try {
             connection();
         } catch (IOException e) {
@@ -38,7 +49,7 @@ public class EchoClient extends JFrame {
         dis = new DataInputStream(socket.getInputStream());
         dos = new DataOutputStream(socket.getOutputStream());
 
-        new Thread(() -> {
+        Thread timeout = new Thread(() -> {
             try {
                 sleep(120000);
                 if (!isAuthorized){
@@ -49,9 +60,9 @@ public class EchoClient extends JFrame {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-        }).start();
+        });
 
-        new Thread(() -> {
+        Thread write = new Thread(() -> {
             try {
                 sleep(2000);
                 while (!isTimeout) {
@@ -59,29 +70,63 @@ public class EchoClient extends JFrame {
                     if (messageFromServer.startsWith("/authok")) {
                         isAuthorized = true;
                         chatArea.append(messageFromServer + "\n");
+                        history = new File("history.txt");
+                        accessFile = new RandomAccessFile(history, "r");
+                        try {
+                            fos = new FileOutputStream(history, true);
+                            StringBuilder message = new StringBuilder();
+                            int number;
+                            int countMessages = 0;
+                            int start = (int) history.length() - 1;
+                            accessFile.seek(start);
+                            try {
+                                while (start > 0 && countMessages < 100) {
+                                    number = accessFile.read();
+                                    start--;
+                                    accessFile.seek(start);
+                                    message.insert(0, (char)number);
+                                    if ((char) number == '\n'){
+                                        countMessages++;
+                                    }
+                                }
+                            } catch (IOException e) {
+                                System.out.println("Can't read history");
+                            }
+                            chatArea.append(message.toString());
+                        } catch (FileNotFoundException e) {
+                            System.out.println("File not found");
+                        }
                         break;
                     }
                     chatArea.append(messageFromServer + "\n");
                 }
 
                 while (isAuthorized) {
-                    String messageFromServer = dis.readUTF();
-                    chatArea.append(messageFromServer + "\n");
-                }
-            } catch (IOException | InterruptedException ignored) {
+                    String messageFromServer = dis.readUTF() + '\n';
+                    fos.write(messageFromServer.getBytes(StandardCharsets.UTF_8));
+                    chatArea.append(messageFromServer);
 
+                }
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
             }
-        }).start();
+        });
+
+        executor.execute(timeout);
+        executor.execute(write);
     }
 
     public void send() {
         if (msgInputField.getText() != null && !msgInputField.getText().trim().isEmpty()) {
             try {
-                dos.writeUTF(msgInputField.getText());
+                String message = msgInputField.getText();
+                dos.writeUTF(message);
                 if (msgInputField.getText().equals("/end")) {
                     isAuthorized = false;
+                    fos.close();
                     closeConnection();
                 }
+
                 msgInputField.setText("");
             } catch (IOException ignored) {
             }
@@ -94,6 +139,7 @@ public class EchoClient extends JFrame {
             dos.close();
             socket.close();
             chatArea.append("Disconnected\n");
+            executor.shutdownNow();
         } catch (IOException ignored) {
         }
     }
@@ -148,8 +194,6 @@ public class EchoClient extends JFrame {
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new EchoClient();
-        });
+        SwingUtilities.invokeLater(EchoClient::new);
     }
 }
