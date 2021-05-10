@@ -1,6 +1,6 @@
-package main.java.serverside;
+package serverside;
 
-import main.java.serverside.service.MyServer;
+import serverside.service.MyServer;
 
 public class MainServerApp {
     public static void main(String[] args) {

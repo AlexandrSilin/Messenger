@@ -1,6 +1,10 @@
-package main.java.serverside.service;
+package serverside.service;
 
 import main.java.serverside.interfaces.AuthService;
+import main.java.serverside.service.Connect;
+import org.apache.log4j.Level;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -11,6 +15,7 @@ public class BaseAuthService implements AuthService {
 
     private Connection connection;
     private Statement statement = null;
+    private final Logger logger = LogManager.getLogger(BaseAuthService.class);
 
     public BaseAuthService() {
         try {
@@ -23,11 +28,13 @@ public class BaseAuthService implements AuthService {
 
     @Override
     public void start() {
+        logger.log(Level.INFO, "AuthService start");
         System.out.println("AuthService start");
     }
 
     @Override
     public void stop() {
+        logger.log(Level.INFO, "AuthService stop");
         System.out.println("AuthService stop");
     }
 
